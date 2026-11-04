@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en-GB"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Walks">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#4a2f73">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<title>Walks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: field-notebook — summary strip, then a numbered route list or a route map; each walk opens a log sheet */
+:root{
+  --bg:#f2f3ee; --surface:#ffffff; --sunk:#e7e9e1; --ink:#1e231f; --muted:#5e665d; --line:#d5d9cf;
+  --heather:#5b3a8c; --heather-soft:#ece6f5; --moss:#3f6a35; --moss-soft:#e3eedc; --contour:#b5793a;
+  --route:#5b3a8c; --route-dim:rgba(91,58,140,.28);
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-data:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#131612; --surface:#1c201b; --sunk:#252a23; --ink:#e5e8e0; --muted:#9aa395; --line:#333a31;
+  --heather:#b79ce8; --heather-soft:#2c2440; --moss:#93c27f; --moss-soft:#22301d; --contour:#d9a36a;
+  --route:#b79ce8; --route-dim:rgba(183,156,232,.3); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#131612; --surface:#1c201b; --sunk:#252a23; --ink:#e5e8e0; --muted:#9aa395; --line:#333a31;
+  --heather:#b79ce8; --heather-soft:#2c2440; --moss:#93c27f; --moss-soft:#22301d; --contour:#d9a36a;
+  --route:#b79ce8; --route-dim:rgba(183,156,232,.3); color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.pin span{display:flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 4px;border-radius:13px;background:#5b3a8c;color:#fff;font:600 11px var(--f-data);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.45)}
+.pin span.done{background:#3f6a35}
+#lmap{width:100%;height:100%}
+.mapbtns{display:flex;gap:8px;flex-wrap:wrap}
+.backup{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px solid var(--line);padding-top:16px}
+.backup .note{flex-basis:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+.wrap{max-width:1100px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px;display:flex;flex-direction:column;gap:16px}
+h1{font-family:var(--f-display);font-weight:700;font-size:40px;line-height:1;margin:0;letter-spacing:.01em;text-wrap:balance}
+.head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.sub{color:var(--muted);font-size:14px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.stat{background:var(--surface);padding:10px 14px}
+.stat b{display:block;font-family:var(--f-data);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+@media (max-width:560px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.bar input[type=search],.bar select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);min-width:0}
+.bar input[type=search]{flex:1 1 220px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{font:600 13px var(--f-body);border:0;background:none;color:var(--muted);padding:8px 12px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--heather);color:var(--surface)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--heather);outline-offset:2px}
+.list{display:flex;flex-direction:column;gap:8px}
+.row{display:grid;grid-template-columns:72px minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px;cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%}
+.row:hover{border-color:var(--heather)}
+.row img{width:72px;height:72px;border-radius:4px;display:block;background:var(--sunk)}
+.row .nm{font-weight:600;font-size:16px;overflow-wrap:anywhere}
+.no{display:inline-block;font-family:var(--f-data);font-size:12px;font-weight:600;color:var(--heather);background:var(--heather-soft);border-radius:3px;padding:1px 6px;margin-right:6px;font-variant-numeric:tabular-nums}
+.meta{font-family:var(--f-data);font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.chip{font-size:12px;padding:1px 7px;border-radius:10px;background:var(--moss-soft);color:var(--moss);font-weight:600}
+.chip.who{background:var(--sunk);color:var(--ink);font-weight:400}
+.chip.none{background:none;color:var(--muted);border:1px dashed var(--line);font-weight:400}
+.right{text-align:right;font-family:var(--f-data);font-variant-numeric:tabular-nums}
+.right b{font-size:17px}
+.right small{display:block;color:var(--muted);font-size:12px}
+@media (max-width:520px){.row{grid-template-columns:60px minmax(0,1fr)}.row img{width:60px;height:60px}.right{grid-column:2;text-align:left}.right small{display:inline;margin-left:8px}}
+.mapbox{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden;height:min(70vh,640px);touch-action:none}
+
+.mapctl{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:6px}
+.mapctl button{font:600 14px var(--f-body);background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:6px 10px;cursor:pointer}
+.maptip{position:absolute;left:10px;bottom:10px;right:10px;font-size:12.5px;color:var(--muted);pointer-events:none}
+.empty{padding:28px;text-align:center;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:6px}
+.note{font-size:13px;color:var(--muted)}
+dialog{border:0;padding:0;border-radius:10px;background:var(--surface);color:var(--ink);width:min(720px,calc(100vw - 24px));max-height:calc(100vh - 32px)}
+dialog::backdrop{background:rgba(10,12,10,.55)}
+.sheet{padding:18px;display:flex;flex-direction:column;gap:14px}
+.sheet h2{font-family:var(--f-display);font-size:30px;font-weight:700;margin:0;line-height:1.05;text-wrap:balance}
+.top{display:grid;grid-template-columns:180px minmax(0,1fr);gap:16px}
+.top img{width:180px;height:180px;border-radius:6px;display:block}
+@media (max-width:520px){.top{grid-template-columns:1fr}.top img{width:100%;height:auto;max-width:260px}}
+.kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.kv div span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.kv div b{font-family:var(--f-data);font-weight:600;font-variant-numeric:tabular-nums}
+.prof{width:100%;height:auto;display:block}
+.sec{font-family:var(--f-display);font-size:20px;font-weight:600;margin:0}
+.outs{display:flex;flex-direction:column;gap:6px}
+.out{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:baseline;padding:8px 10px;background:var(--sunk);border-radius:5px}
+.out .d{font-family:var(--f-data);font-weight:600;font-variant-numeric:tabular-nums}
+.out .x{border:0;background:none;color:var(--muted);cursor:pointer;font:inherit;padding:2px 6px}
+.out .x:hover{color:var(--ink)}
+form.add{display:grid;grid-template-columns:150px minmax(0,1fr) minmax(0,1fr) auto;gap:8px}
+@media (max-width:600px){form.add{grid-template-columns:1fr 1fr}}
+form.add input,textarea{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--ink);min-width:0;width:100%}
+.btn{font:600 14px var(--f-body);padding:8px 14px;border-radius:6px;border:1px solid var(--heather);background:var(--heather);color:var(--surface);cursor:pointer;text-decoration:none;display:inline-block}
+.btn.ghost{background:none;color:var(--heather)}
+.btn:disabled{opacity:.5;cursor:default}
+.acts{display:flex;flex-wrap:wrap;gap:8px}
+.close{position:sticky;top:0;float:right;margin:10px 10px 0 0;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:50%;width:34px;height:34px;font-size:18px;cursor:pointer}
+.status{font-size:13px;color:var(--muted);min-height:1.2em}
+</style>
+</head><body>
+
+<div class="wrap">
+  <header class="head">
+    <div>
+      <h1>Walks</h1>
+      <div class="sub">Routes saved in OS Maps, numbered in the order they were saved. Open one to log when you walked it and who came.</div>
+    </div>
+  </header>
+
+  <section class="stats" aria-label="Summary">
+    <div class="stat"><b id="sRoutes">–</b><span>Routes</span></div>
+    <div class="stat"><b id="sWalked">–</b><span>Routes walked</span></div>
+    <div class="stat"><b id="sOut">–</b><span>Outings logged</span></div>
+    <div class="stat"><b id="sMiles">–</b><span>Miles logged</span></div>
+  </section>
+
+  <div class="bar">
+    <input id="q" type="search" placeholder="Search walks or companions" aria-label="Search">
+    <select id="sort" aria-label="Sort">
+      <option value="no-desc">Newest saved first</option>
+      <option value="no-asc">Oldest saved first</option>
+      <option value="last">Last walked</option>
+      <option value="name">Name A–Z</option>
+      <option value="dist">Longest first</option>
+      <option value="up">Most ascent first</option>
+      <option value="near">Nearest to home</option>
+    </select>
+    <select id="who" aria-label="Companion"><option value="">Anyone</option></select>
+    <select id="shape" aria-label="Shape"><option value="">Any shape</option><option>Circular</option><option>Linear</option></select>
+    <select id="band" aria-label="Length"><option value="">Any length</option></select>
+    <select id="area" aria-label="Area"><option value="">Any area</option><option>Local</option><option>Wider UK</option><option>International</option></select>
+    <div class="seg" role="group" aria-label="Show">
+      <button id="fAll" aria-pressed="true">All</button>
+      <button id="fWalked" aria-pressed="false">Walked</button>
+      <button id="fTodo" aria-pressed="false">Not logged</button>
+    </div>
+    <button class="btn ghost" id="allZip" style="padding:7px 12px">GPX for shown walks</button>
+    <div class="seg" role="group" aria-label="View">
+      <button id="vList" aria-pressed="true">List</button>
+      <button id="vMap" aria-pressed="false">Map</button>
+    </div>
+  </div>
+  <div class="status" id="status">Loading your walk log…</div>
+
+  <section id="listView"><div class="list" id="list"></div></section>
+  <section id="mapView" hidden style="display:flex;flex-direction:column;gap:8px">
+    <div class="mapbtns"><button class="btn ghost" id="zFit">Fit shown walks</button><button class="btn ghost" id="zHome">Home area</button></div>
+    <div class="mapbox" id="mapbox"><div id="lmap" aria-label="Map of walk routes with numbered start points"></div></div>
+    <div class="note">Tap a number or a route to open the walk. Green numbers are walks you have logged. Switch between street and topo maps with the layers button.</div>
+  </section>
+  <section class="backup" aria-label="Backup">
+    <button class="btn ghost" id="bkOut">Back up my log</button>
+    <label class="btn ghost" for="bkIn" style="cursor:pointer">Restore a backup</label><input type="file" id="bkIn" accept=".json,application/json" hidden>
+    <button class="btn ghost" id="csvOut">Export log for Excel (CSV)</button>
+    <div class="note">Your log is kept on this device only. Back it up now and then (save the file to iCloud Drive) so you can restore it on another device or after clearing Safari.</div>
+  </section>
+</section>
+</div>
+
+<dialog id="dlg"><button class="close" id="dClose" aria-label="Close">×</button><div class="sheet" id="sheet"></div></dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="walks-data.js"></script>
+<script>
+const WALKS=window.WALKS_DATA||[];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const MI=1.609344;
+function decode(s){const pts=[];let i=0,lat=0,lon=0;while(i<s.length){for(let k=0;k<2;k++){let sh=0,r=0,b;do{b=s.charCodeAt(i++)-63;r|=(b&31)<<sh;sh+=5}while(b>=32);const v=(r&1)?~(r>>1):(r>>1);if(k===0)lat+=v;else lon+=v}pts.push([lat/1e5,lon/1e5])}return pts}
+const bandOf=m=>m>=12?'12+ mi':m<1?'Under 1 mi':`${Math.floor(m)}–${Math.floor(m)+1} mi`;
+WALKS.forEach(w=>{w.pts=decode(w.t);w.mi=w.km/MI;w.band=bandOf(w.mi);w.bk=Math.min(12,Math.floor(w.mi))});
+const areaOf=w=>LOG[w.id]?.area||w.ar;
+const fmtD=d=>{if(!d)return'';const [y,m,dd]=d.split('-');return `${+dd} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1]} ${y}`};
+
+// ---- log state (this device) ----
+const KEY='walks-log-v1';
+let LOG={}; const dl=true;
+try{LOG=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){LOG={}}
+function outingsOf(w){return (LOG[w.id]?.outings||[]).slice().sort((a,b)=>b.d.localeCompare(a.d))}
+function whoList(s){return String(s||'').split(/[,&\/]| and /i).map(x=>x.trim()).filter(Boolean)}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(LOG));return true}catch(e){setStatus('Couldn’t save on this device: '+(e&&e.message||e));return false}}
+function save(id,body){const empty=!body.outings.length&&!body.notes&&!body.area;if(empty)delete LOG[id];else LOG[id]=body;if(persist())setStatus('Saved.');render()}
+function setStatus(t){$('status').textContent=t}
+
+// ---- filters ----
+let F={q:'',sort:'no-desc',who:'',show:'all',view:'list',shape:'',band:'',area:''};
+function visible(){
+  const q=F.q.toLowerCase();
+  let a=WALKS.filter(w=>{
+    const o=outingsOf(w);
+    if(F.shape&&(w.loop?'Circular':'Linear')!==F.shape)return false;
+    if(F.band&&w.band!==F.band)return false;
+    if(F.area&&areaOf(w)!==F.area)return false;
+    if(F.show==='walked'&&!o.length)return false;
+    if(F.show==='todo'&&o.length)return false;
+    if(F.who&&!o.some(x=>whoList(x.w).some(p=>p.toLowerCase()===F.who.toLowerCase())))return false;
+    if(q){const hay=(w.n+' '+w.no+' '+o.map(x=>x.w+' '+(x.n||'')).join(' ')+' '+(LOG[w.id]?.notes||'')).toLowerCase();if(!hay.includes(q))return false}
+    return true});
+  const last=w=>outingsOf(w)[0]?.d||'';
+  const S={'no-desc':(a,b)=>b.no-a.no,'no-asc':(a,b)=>a.no-b.no,name:(a,b)=>a.n.localeCompare(b.n),dist:(a,b)=>b.km-a.km,up:(a,b)=>b.up-a.up,near:(a,b)=>a.hm-b.hm,last:(a,b)=>last(b).localeCompare(last(a))||b.no-a.no};
+  return a.sort(S[F.sort]);
+}
+
+function render(){
+  // stats
+  let walked=0,outs=0,miles=0;const people=new Set();
+  WALKS.forEach(w=>{const o=outingsOf(w);if(o.length)walked++;outs+=o.length;miles+=o.length*w.mi;o.forEach(x=>whoList(x.w).forEach(p=>people.add(p)))});
+  $('sRoutes').textContent=WALKS.length;$('sWalked').textContent=walked;$('sOut').textContent=outs;$('sMiles').textContent=Math.round(miles);
+  const sel=$('who'),cur=F.who;sel.innerHTML='<option value="">Anyone</option>'+[...people].sort().map(p=>`<option${p===cur?' selected':''}>${esc(p)}</option>`).join('');
+  const v=visible();
+  if(F.view==='list'){
+    $('list').innerHTML=v.length?v.map(w=>{const o=outingsOf(w);const ppl=[...new Set(o.flatMap(x=>whoList(x.w)))];
+      return `<button class="row" data-id="${w.id}">
+        <img src="${w.img}" alt="" loading="lazy">
+        <div style="min-width:0"><div class="nm"><span class="no">${w.no}</span>${esc(w.n)}</div>
+          <div class="meta">${w.loop?'Circular':'Linear'} · ${areaOf(w)} · saved ${fmtD(w.c)}</div>
+          <div class="chips">${o.length?o.slice(0,4).map(x=>`<span class="chip">${fmtD(x.d)}</span>`).join('')+(o.length>4?`<span class="chip">+${o.length-4}</span>`:''):'<span class="chip none">Not logged yet</span>'}${ppl.map(p=>`<span class="chip who">${esc(p)}</span>`).join('')}</div></div>
+        <div class="right"><b>${w.mi.toFixed(2)} mi</b><small>${w.km.toFixed(1)} km · ↑${w.up} m</small></div></button>`}).join(''):'<div class="empty">No walks match these filters.</div>';
+  } else drawMap();
+}
+
+// ---- map ----
+let lmap=null,layer=null;
+function homeBounds(){const ne=WALKS.filter(w=>w.ar==='Local');return L.latLngBounds((ne.length?ne:WALKS).map(w=>w.s))}
+function drawMap(){
+  if(!window.L){$('mapbox').innerHTML='<div class="empty">The map needs an internet connection.</div>';return}
+  if(!lmap){
+    lmap=L.map('lmap');
+    const osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'});
+    const topo=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17,attribution:'© OpenStreetMap contributors, SRTM · © OpenTopoMap (CC-BY-SA)'});
+    osm.addTo(lmap);L.control.layers({'Street map':osm,'Topo map':topo}).addTo(lmap);L.control.scale({imperial:true,metric:true}).addTo(lmap);
+    layer=L.layerGroup().addTo(lmap);lmap.fitBounds(homeBounds(),{padding:[20,20]});
+  }
+  setTimeout(()=>lmap.invalidateSize(),50);
+  layer.clearLayers();
+  visible().forEach(w=>{
+    const tip=`${w.no}. ${esc(w.n)} · ${w.mi.toFixed(1)} mi`;
+    L.polyline(w.pts,{color:'#5b3a8c',weight:3,opacity:.8}).bindTooltip(tip,{sticky:true}).on('click',()=>openWalk(w.id)).addTo(layer);
+    const done=outingsOf(w).length>0;
+    L.marker(w.s,{icon:L.divIcon({className:'pin',html:`<span class="${done?'done':''}">${w.no}</span>`,iconSize:[26,26],iconAnchor:[13,13]}),riseOnHover:true})
+      .bindTooltip(tip).on('click',()=>openWalk(w.id)).addTo(layer);
+  });
+}
+$('zFit').onclick=()=>{const v=visible();if(v.length)lmap.fitBounds(L.latLngBounds(v.flatMap(w=>w.pts)),{padding:[20,20]})};
+$('zHome').onclick=()=>lmap.fitBounds(homeBounds(),{padding:[20,20]});
+
+// ---- detail sheet ----
+let openId=null;
+function profile(w){
+  const p=w.p;if(p.length<2)return'';const W=640,H=140,pl=36,pb=20;const maxX=p[p.length-1][0]||1;const es=p.map(x=>x[1]);let lo=Math.min(...es),hi=Math.max(...es);if(hi-lo<20){hi=lo+20}
+  const X=d=>pl+(d/maxX)*(W-pl-8),Y=e=>8+(1-(e-lo)/(hi-lo))*(H-8-pb);
+  const line=p.map((x,i)=>(i?'L':'M')+X(x[0]).toFixed(1)+','+Y(x[1]).toFixed(1)).join('');
+  const area=line+`L${X(maxX)},${H-pb}L${X(0)},${H-pb}Z`;
+  return `<svg class="prof" viewBox="0 0 ${W} ${H}" role="img" aria-label="Elevation profile, ${Math.round(lo)} to ${Math.round(hi)} metres">
+   <path d="${area}" fill="var(--heather-soft)"/><path d="${line}" fill="none" stroke="var(--heather)" stroke-width="2"/>
+   <line x1="${pl}" x2="${W-8}" y1="${H-pb}" y2="${H-pb}" stroke="var(--line)"/>
+   <text x="${pl-4}" y="${Y(hi)+4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--f-data)">${Math.round(hi)}m</text>
+   <text x="${pl-4}" y="${Y(lo)+4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--f-data)">${Math.round(lo)}m</text>
+   <text x="${pl}" y="${H-5}" font-size="11" fill="var(--muted)" font-family="var(--f-data)">0</text>
+   <text x="${W-8}" y="${H-5}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--f-data)">${(maxX/MI).toFixed(1)} mi</text></svg>`;
+}
+function sheet(w){
+  const o=outingsOf(w);const today=new Date().toISOString().slice(0,10);
+  const g=`https://www.google.com/maps/search/?api=1&query=${w.s[0]},${w.s[1]}`;
+  return `<h2><span class="no" style="font-size:16px;vertical-align:middle">${w.no}</span>${esc(w.n)}</h2>
+  <div class="top"><img src="${w.img}" alt="Route snapshot">
+   <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+    <div class="kv"><div><span>Distance</span><b>${w.mi.toFixed(2)} mi</b></div><div><span>Kilometres</span><b>${w.km.toFixed(2)}</b></div><div><span>Ascent</span><b>${w.up} m</b></div>
+     <div><span>Descent</span><b>${w.dn} m</b></div><div><span>Shape</span><b>${w.loop?'Circular':'Linear'}</b></div><div><span>Saved</span><b>${fmtD(w.c)}</b></div>
+     <div><span>Area</span><select id="aArea" aria-label="Area" style="font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink)">${['Local','Wider UK','International'].map(a=>`<option${a===areaOf(w)?' selected':''}>${a}</option>`).join('')}</select></div>
+     <div><span>From home</span><b>${w.hm} mi</b></div><div><span>Length band</span><b>${w.band}</b></div></div>
+    <div class="acts"><button class="btn" id="gpxBtn"${dl?'':' disabled title="Downloads aren’t available in this view"'}>Download GPX</button>
+     <a class="btn ghost" href="https://explore.osmaps.com/route/${w.id}" target="_blank" rel="noopener">Open in OS Maps</a>
+     <a class="btn ghost" href="${g}" target="_blank" rel="noopener">Start point in Google Maps</a></div>
+   </div></div>
+  ${profile(w)}
+  <h3 class="sec">Walk log</h3>
+  <div class="outs">${o.length?o.map((x,i)=>`<div class="out"><span class="d">${fmtD(x.d)}</span><span>${esc(x.w||'Just me')}${x.n?` <span class="note">· ${esc(x.n)}</span>`:''}</span><button class="x" data-del="${esc(x.d)}|${esc(x.w)}|${esc(x.n||'')}" aria-label="Remove this outing">Remove</button></div>`).join(''):'<div class="note">No outings logged for this route yet.</div>'}</div>
+  <form class="add" id="addF"><input type="date" id="aD" value="${today}" required aria-label="Date walked">
+   <input id="aW" list="ppl" placeholder="Who was with you (comma separated)" aria-label="Who was with you">
+   <input id="aN" placeholder="Note (optional)" aria-label="Note">
+   <button class="btn" type="submit">Add outing</button></form>
+  <datalist id="ppl">${[...new Set(Object.values(LOG).flatMap(l=>(l.outings||[]).flatMap(x=>whoList(x.w))))].sort().map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
+  <label class="sec" for="aNotes" style="font-size:16px">Notes</label>
+  <textarea id="aNotes" rows="3" placeholder="Parking, pub, conditions…">${esc(LOG[w.id]?.notes||'')}</textarea>
+  ${w.ds?`<div class="note">OS Maps description: ${esc(w.ds)}</div>`:''}`;
+}
+function openWalk(id){openId=id;const w=WALKS.find(x=>x.id===id);$('sheet').innerHTML=sheet(w);wire(w);if(!$('dlg').open)$('dlg').showModal()}
+function body(w){const b=LOG[w.id]||{};const o={outings:(b.outings||[]).map(x=>({...x})),notes:b.notes||''};if(b.area)o.area=b.area;return o}
+function wire(w){
+  $('addF').onsubmit=e=>{e.preventDefault();const b=body(w);b.outings.push({d:$('aD').value,w:$('aW').value.trim(),n:$('aN').value.trim()});save(w.id,b);openWalk(w.id)};
+  $('sheet').querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{const [d,ww,n]=btn.dataset.del.split('|');const b=body(w);const i=b.outings.findIndex(x=>x.d===d&&(x.w||'')===ww&&(x.n||'')===n);if(i>=0)b.outings.splice(i,1);save(w.id,b);openWalk(w.id)});
+  $('aArea').onchange=()=>{const b=body(w);const v=$('aArea').value;if(v===w.ar)delete b.area;else b.area=v;save(w.id,b)};
+  $('aNotes').onchange=()=>{const b=body(w);const v=$('aNotes').value;if(v!==b.notes){b.notes=v;save(w.id,b)}};
+  const g=$('gpxBtn');if(g)g.onclick=()=>{dlBlob(new Blob([gpx(w)],{type:'application/gpx+xml'}),fname(w));setStatus('GPX downloaded.')};
+}
+function fname(w){return (String(w.no).padStart(3,'0')+' '+w.n).replace(/[^\w &()\-]+/g,' ').replace(/\s+/g,' ').trim()+'.gpx'}
+function dlBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000)}
+async function saveZip(list,zipName){
+  if(!window.JSZip){setStatus('Zip downloads need an internet connection.');return}
+  const z=new JSZip();list.forEach(w=>z.file(fname(w),gpx(w)));
+  dlBlob(await z.generateAsync({type:'blob',compression:'DEFLATE'}),zipName);setStatus('Downloaded '+zipName+'.');
+}
+function gpx(w){const x=s=>esc(s);const pts=w.pts;const e=w.e||[];
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Walks" xmlns="http://www.topografix.com/GPX/1/1">\n<metadata><name>${x(w.n)}</name></metadata>\n<trk><name>${x(w.n)}</name><trkseg>\n`+pts.map((p,i)=>`<trkpt lat="${p[0].toFixed(5)}" lon="${p[1].toFixed(5)}">${e[i]!=null?`<ele>${e[i]}</ele>`:''}</trkpt>`).join('\n')+`\n</trkseg></trk></gpx>\n`}
+$('allZip').onclick=()=>{const v=visible();saveZip(v,v.length===WALKS.length?'All walks GPX.zip':'Walks GPX ('+v.length+').zip')};
+$('dClose').onclick=()=>$('dlg').close();
+$('dlg').addEventListener('click',e=>{if(e.target===$('dlg'))$('dlg').close()});
+$('list').addEventListener('click',e=>{const r=e.target.closest('.row');if(r)openWalk(r.dataset.id)});
+
+// ---- controls ----
+$('q').oninput=e=>{F.q=e.target.value;render()};
+$('sort').onchange=e=>{F.sort=e.target.value;render()};
+$('who').onchange=e=>{F.who=e.target.value;render()};
+$('shape').onchange=e=>{F.shape=e.target.value;render()};
+$('area').onchange=e=>{F.area=e.target.value;render()};
+(()=>{const bs=[...new Map(WALKS.slice().sort((a,b)=>a.mi-b.mi).map(w=>[w.band,w])).keys()];$('band').innerHTML='<option value="">Any length</option>'+bs.map(b=>`<option>${b}</option>`).join('');$('band').onchange=e=>{F.band=e.target.value;render()}})();
+const showB={all:'fAll',walked:'fWalked',todo:'fTodo'};
+Object.entries(showB).forEach(([k,id])=>$(id).onclick=()=>{F.show=k;Object.values(showB).forEach(b=>$(b).setAttribute('aria-pressed',b===id));render()});
+function setView(v){F.view=v;$('vList').setAttribute('aria-pressed',v==='list');$('vMap').setAttribute('aria-pressed',v==='map');$('listView').hidden=v!=='list';$('mapView').hidden=v!=='map';render()}
+$('vList').onclick=()=>{setView('list');try{history.replaceState(null,'','#list')}catch(e){}};
+$('vMap').onclick=()=>{setView('map');try{history.replaceState(null,'','#map')}catch(e){}};
+setView(location.hash==='#map'?'map':'list');
+
+// ---- backup ----
+const stamp=()=>new Date().toISOString().slice(0,10);
+$('bkOut').onclick=()=>{dlBlob(new Blob([JSON.stringify({app:'walks',version:1,saved:new Date().toISOString(),log:LOG},null,1)],{type:'application/json'}),`Walks log backup ${stamp()}.json`);setStatus('Backup downloaded.')};
+$('bkIn').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());const log=j.log||j;if(typeof log!=='object')throw new Error('not a Walks backup');
+  const n=Object.keys(log).length;LOG=log;if(persist()){render();setStatus(`Restored ${n} walks from ${f.name}.`)}}catch(err){setStatus('That file isn’t a Walks backup: '+err.message)}e.target.value=''};
+$('csvOut').onclick=()=>{const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';const rows=[['No','Walk','Shape','Miles','Ascent (m)','Area','Date walked','Who with','Note']];
+  WALKS.slice().sort((a,b)=>a.no-b.no).forEach(w=>outingsOf(w).forEach(o=>rows.push([w.no,w.n,w.loop?'Circular':'Linear',w.mi.toFixed(2),w.up,areaOf(w),o.d,o.w,o.n])));
+  dlBlob(new Blob(['\ufeff'+rows.map(r=>r.map(q).join(',')).join('\r\n')],{type:'text/csv'}),`Walks log ${stamp()}.csv`);setStatus(rows.length>1?'CSV downloaded.':'No outings logged yet — the CSV only has headers.')};
+setStatus(Object.keys(LOG).length?'':'No walks logged on this device yet. Open a walk to add the first date.');
+render();
+</script>
+</body></html>
