@@ -119,6 +119,9 @@ form.add input,textarea{font:inherit;padding:7px 9px;border:1px solid var(--line
 .jump{position:fixed;right:max(14px,calc(env(safe-area-inset-right,0px) + 10px));bottom:calc(env(safe-area-inset-bottom,0px) + 16px);display:flex;flex-direction:column;gap:8px;z-index:900}
 .jump button{width:46px;height:46px;border-radius:50%;border:0;background:var(--heather);color:var(--surface);font-size:22px;line-height:1;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center}
 .jump button[hidden]{display:none}
+.out.editing{outline:2px solid #5b3a8c;outline-offset:2px}
+.add.is-editing{outline:2px dashed #5b3a8c;outline-offset:4px;border-radius:6px}
+#aCancel{grid-column:1/-1}
 </style>
 </head><body>
 
@@ -310,12 +313,13 @@ function sheet(w){
    </div></div>
   ${profile(w)}
   <h3 class="sec">Walk log</h3>
-  <div class="outs">${o.length?o.map(x=>{const k=`${esc(x.d)}|${esc(x.w||'')}|${esc(x.n||'')}`;return `<div class="out"><div class="oh"><span class="d">${fmtD(x.d)}</span>${editing()?`<span class="ob"><button class="x" data-edit="${k}">Edit</button><button class="x" data-del="${k}" aria-label="Remove this date">Remove</button></span>`:''}</div>
+  <div class="outs">${o.length?o.map(x=>{const k=(LOG[w.id]?.outings||[]).indexOf(x);return `<div class="out" data-i="${k}"><div class="oh"><span class="d">${fmtD(x.d)}</span>${editing()?`<span class="ob"><button class="x" data-edit="${k}">Edit</button><button class="x" data-del="${k}" aria-label="Remove this date">Remove</button></span>`:''}</div>
     <div class="ow${x.w?'':' none'}">${x.w?'With: '+esc(x.w):'Who with: not recorded'}</div>${x.n?`<div class="note">${esc(x.n)}</div>`:''}</div>`}).join(''):'<div class="note">No outings logged for this route yet.</div>'}</div>
   ${editing()?`  <form class="add" id="addF"><input type="date" id="aD" value="${today}" required aria-label="Date walked">
    <input id="aW" list="ppl" placeholder="Who was with you (comma separated)" aria-label="Who was with you">
    <input id="aN" placeholder="Note (optional)" aria-label="Note">
    <button class="btn" type="submit">Add outing</button>
+   <button class="x" type="button" id="aCancel" hidden>Cancel edit</button>
    <div class="quick" id="quick">${quickNames().map(p=>`<button type="button" class="qn" data-q="${esc(p)}" aria-pressed="false">${esc(p)}</button>`).join('')}</div></form>
   <datalist id="ppl">${[...new Set(Object.values(LOG).flatMap(l=>(l.outings||[]).flatMap(x=>whoList(x.w))))].sort().map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
   <label class="sec" for="aNotes" style="font-size:16px">Notes</label>
@@ -336,11 +340,15 @@ function wire(w){
     if(has)cur=cur.filter(x=>x.toLowerCase()!==q.toLowerCase());else if(q==='Just me')cur=['Just me'];else cur=cur.filter(x=>x.toLowerCase()!=='just me').concat(q);
     $('aW').value=cur.join(', ');syncQuick()});
   $('aW').oninput=syncQuick;
-  const find=(b,key)=>{const [d,ww,n]=key.split('|');return b.outings.findIndex(x=>x.d===d&&(x.w||'')===ww&&(x.n||'')===n)};
-  $('addF').onsubmit=e=>{e.preventDefault();const b=body(w);const rec={d:$('aD').value,w:$('aW').value.trim(),n:$('aN').value.trim()};const k=$('addF').dataset.edit;const i=k?find(b,k):-1;if(i>=0)b.outings[i]=rec;else b.outings.push(rec);save(w.id,b);openWalk(w.id)};
-  $('sheet').querySelectorAll('[data-edit]').forEach(btn=>btn.onclick=()=>{const b=body(w);const i=find(b,btn.dataset.edit);if(i<0)return;const x=b.outings[i];
-    $('aD').value=x.d;$('aW').value=x.w||'';$('aN').value=x.n||'';$('addF').dataset.edit=btn.dataset.edit;syncQuick();$('addF').querySelector('button[type=submit]').textContent='Save changes';$('aW').focus();$('addF').scrollIntoView({block:'center'})});
-  $('sheet').querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{const [d,ww,n]=btn.dataset.del.split('|');const b=body(w);const i=b.outings.findIndex(x=>x.d===d&&(x.w||'')===ww&&(x.n||'')===n);if(i>=0)b.outings.splice(i,1);save(w.id,b);openWalk(w.id)});
+  $('addF').onsubmit=e=>{e.preventDefault();const b=body(w);const rec={d:$('aD').value,w:$('aW').value.trim(),n:$('aN').value.trim()};const k=$('addF').dataset.edit;
+    if(k!==undefined&&k!==''){const i=+k;if(!b.outings[i]){setStatus('Couldn’t find that outing to update — nothing was changed.');return}b.outings[i]=rec}else b.outings.push(rec);save(w.id,b);openWalk(w.id)};
+  $('aCancel').onclick=()=>openWalk(w.id);
+  $('sheet').querySelectorAll('[data-edit]').forEach(btn=>btn.onclick=()=>{const b=body(w);const i=+btn.dataset.edit;const x=b.outings[i];if(!x){setStatus('Couldn’t open that outing for editing.');return}
+    $('aD').value=x.d;$('aW').value=x.w||'';$('aN').value=x.n||'';$('addF').dataset.edit=String(i);syncQuick();
+    $('sheet').querySelectorAll('.out').forEach(c=>c.classList.toggle('editing',c.dataset.i===String(i)));
+    const sb=$('addF').querySelector('button[type=submit]');sb.textContent='Save changes to '+fmtD(x.d);$('aCancel').hidden=false;$('addF').classList.add('is-editing');
+    $('addF').scrollIntoView({block:'center'})});
+  $('sheet').querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{const b=body(w);const i=+btn.dataset.del;if(b.outings[i])b.outings.splice(i,1);save(w.id,b);openWalk(w.id)});
   $('aArea').onchange=()=>{const b=body(w);const v=$('aArea').value;if(v===w.ar)delete b.area;else b.area=v;save(w.id,b)};
   $('aNotes').onchange=()=>{const b=body(w);const v=$('aNotes').value;if(v!==b.notes){b.notes=v;save(w.id,b)}};
   const g=$('gpxBtn');if(g)g.onclick=()=>{dlBlob(new Blob([gpx(w)],{type:'application/gpx+xml'}),fname(w));setStatus('GPX downloaded.')};
