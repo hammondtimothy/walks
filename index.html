@@ -158,11 +158,15 @@ form.add input,textarea{font:inherit;padding:7px 9px;border:1px solid var(--line
     <div class="mapbox" id="mapbox"><div id="lmap" aria-label="Map of walk routes with numbered start points"></div></div>
     <div class="note">Tap a number or a route to open the walk. Green numbers are walks you have logged. Switch between street and topo maps with the layers button.</div>
   </section>
-  <section class="backup" aria-label="Backup">
-    <button class="btn ghost" id="bkOut">Back up my log</button>
-    <label class="btn ghost" for="bkIn" style="cursor:pointer">Restore a backup</label><input type="file" id="bkIn" accept=".json,application/json" hidden>
+  <section class="backup" aria-label="Walk log">
+    <span id="editTools" style="display:contents">
+      <button class="btn" id="shareOut">Share log with friends</button>
+      <button class="btn ghost" id="bkOut">Back up my log</button>
+      <label class="btn ghost" for="bkIn" style="cursor:pointer">Restore a backup</label><input type="file" id="bkIn" accept=".json,application/json" hidden>
+    </span>
     <button class="btn ghost" id="csvOut">Export log for Excel (CSV)</button>
-    <div class="note">Your log is kept on this device only. Back it up now and then (save the file to iCloud Drive) so you can restore it on another device or after clearing Safari.</div>
+    <button class="btn ghost" id="modeBtn"></button>
+    <div class="note" id="logNote"></div>
   </section>
 </section>
 </div>
@@ -185,11 +189,15 @@ const fmtD=d=>{if(!d)return'';const [y,m,dd]=d.split('-');return `${+dd} ${['Jan
 
 // ---- log state (this device) ----
 const KEY='walks-log-v1';
-let LOG={}; const dl=true;
-try{LOG=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){LOG={}}
+const dl=true;
+let MODE='view';try{MODE=localStorage.getItem('walks-mode')||'view'}catch(e){}
+const editing=()=>MODE==='edit';
+let LOCAL={};try{LOCAL=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){LOCAL={}}
+let SHARED={},sharedAt='',sharedState='loading';
+let LOG=editing()?LOCAL:SHARED;
 function outingsOf(w){return (LOG[w.id]?.outings||[]).slice().sort((a,b)=>b.d.localeCompare(a.d))}
 function whoList(s){return String(s||'').split(/[,&\/]| and /i).map(x=>x.trim()).filter(Boolean)}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(LOG));return true}catch(e){setStatus('Couldn’t save on this device: '+(e&&e.message||e));return false}}
+function persist(){LOCAL=LOG;try{localStorage.setItem(KEY,JSON.stringify(LOG));return true}catch(e){setStatus('Couldn’t save on this device: '+(e&&e.message||e));return false}}
 function save(id,body){const empty=!body.outings.length&&!body.notes&&!body.area;if(empty)delete LOG[id];else LOG[id]=body;if(persist())setStatus('Saved.');render()}
 function setStatus(t){$('status').textContent=t}
 
@@ -278,7 +286,7 @@ function sheet(w){
    <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
     <div class="kv"><div><span>Distance</span><b>${w.mi.toFixed(2)} mi</b></div><div><span>Kilometres</span><b>${w.km.toFixed(2)}</b></div><div><span>Ascent</span><b>${w.up} m</b></div>
      <div><span>Descent</span><b>${w.dn} m</b></div><div><span>Shape</span><b>${w.loop?'Circular':'Linear'}</b></div><div><span>Saved</span><b>${fmtD(w.c)}</b></div>
-     <div><span>Area</span><select id="aArea" aria-label="Area" style="font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink)">${['Local','Wider UK','International'].map(a=>`<option${a===areaOf(w)?' selected':''}>${a}</option>`).join('')}</select></div>
+     <div><span>Area</span>${editing()?`<select id="aArea" aria-label="Area" style="font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink)">${['Local','Wider UK','International'].map(a=>`<option${a===areaOf(w)?' selected':''}>${a}</option>`).join('')}</select>`:`<b>${areaOf(w)}</b>`}</div>
      <div><span>From home</span><b>${w.hm} mi</b></div><div><span>Length band</span><b>${w.band}</b></div></div>
     <div class="acts"><button class="btn" id="gpxBtn"${dl?'':' disabled title="Downloads aren’t available in this view"'}>Download GPX</button>
      <a class="btn ghost" href="https://explore.osmaps.com/route/${w.id}" target="_blank" rel="noopener">Open in OS Maps</a>
@@ -286,19 +294,22 @@ function sheet(w){
    </div></div>
   ${profile(w)}
   <h3 class="sec">Walk log</h3>
-  <div class="outs">${o.length?o.map((x,i)=>`<div class="out"><span class="d">${fmtD(x.d)}</span><span>${esc(x.w||'Just me')}${x.n?` <span class="note">· ${esc(x.n)}</span>`:''}</span><button class="x" data-del="${esc(x.d)}|${esc(x.w)}|${esc(x.n||'')}" aria-label="Remove this outing">Remove</button></div>`).join(''):'<div class="note">No outings logged for this route yet.</div>'}</div>
-  <form class="add" id="addF"><input type="date" id="aD" value="${today}" required aria-label="Date walked">
+  <div class="outs">${o.length?o.map((x,i)=>`<div class="out"><span class="d">${fmtD(x.d)}</span><span>${esc(x.w||'Just me')}${x.n?` <span class="note">· ${esc(x.n)}</span>`:''}</span>${editing()?`<button class="x" data-del="${esc(x.d)}|${esc(x.w)}|${esc(x.n||'')}" aria-label="Remove this outing">Remove</button>`:''}</div>`).join(''):'<div class="note">No outings logged for this route yet.</div>'}</div>
+  ${editing()?`  <form class="add" id="addF"><input type="date" id="aD" value="${today}" required aria-label="Date walked">
    <input id="aW" list="ppl" placeholder="Who was with you (comma separated)" aria-label="Who was with you">
    <input id="aN" placeholder="Note (optional)" aria-label="Note">
    <button class="btn" type="submit">Add outing</button></form>
   <datalist id="ppl">${[...new Set(Object.values(LOG).flatMap(l=>(l.outings||[]).flatMap(x=>whoList(x.w))))].sort().map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
   <label class="sec" for="aNotes" style="font-size:16px">Notes</label>
   <textarea id="aNotes" rows="3" placeholder="Parking, pub, conditions…">${esc(LOG[w.id]?.notes||'')}</textarea>
+`:(LOG[w.id]?.notes?`<h3 class="sec" style="font-size:16px">Notes</h3><div>${esc(LOG[w.id].notes)}</div>`:'')}
   ${w.ds?`<div class="note">OS Maps description: ${esc(w.ds)}</div>`:''}`;
 }
 function openWalk(id){openId=id;const w=WALKS.find(x=>x.id===id);$('sheet').innerHTML=sheet(w);wire(w);if(!$('dlg').open)$('dlg').showModal()}
 function body(w){const b=LOG[w.id]||{};const o={outings:(b.outings||[]).map(x=>({...x})),notes:b.notes||''};if(b.area)o.area=b.area;return o}
 function wire(w){
+  const g0=$('gpxBtn');if(g0)g0.onclick=()=>{dlBlob(new Blob([gpx(w)],{type:'application/gpx+xml'}),fname(w));setStatus('GPX downloaded.')};
+  if(!editing())return;
   $('addF').onsubmit=e=>{e.preventDefault();const b=body(w);b.outings.push({d:$('aD').value,w:$('aW').value.trim(),n:$('aN').value.trim()});save(w.id,b);openWalk(w.id)};
   $('sheet').querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{const [d,ww,n]=btn.dataset.del.split('|');const b=body(w);const i=b.outings.findIndex(x=>x.d===d&&(x.w||'')===ww&&(x.n||'')===n);if(i>=0)b.outings.splice(i,1);save(w.id,b);openWalk(w.id)});
   $('aArea').onchange=()=>{const b=body(w);const v=$('aArea').value;if(v===w.ar)delete b.area;else b.area=v;save(w.id,b)};
@@ -341,7 +352,22 @@ $('bkIn').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=
 $('csvOut').onclick=()=>{const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';const rows=[['No','Walk','Shape','Miles','Ascent (m)','Area','Date walked','Who with','Note']];
   WALKS.slice().sort((a,b)=>a.no-b.no).forEach(w=>outingsOf(w).forEach(o=>rows.push([w.no,w.n,w.loop?'Circular':'Linear',w.mi.toFixed(2),w.up,areaOf(w),o.d,o.w,o.n])));
   dlBlob(new Blob(['\ufeff'+rows.map(r=>r.map(q).join(',')).join('\r\n')],{type:'text/csv'}),`Walks log ${stamp()}.csv`);setStatus(rows.length>1?'CSV downloaded.':'No outings logged yet — the CSV only has headers.')};
-setStatus(Object.keys(LOG).length?'':'No walks logged on this device yet. Open a walk to add the first date.');
+$('shareOut').onclick=()=>{dlBlob(new Blob([JSON.stringify({app:'walks',version:1,saved:new Date().toISOString(),log:LOCAL},null,1)],{type:'application/json'}),'shared-log.json');setStatus('Downloaded shared-log.json. Upload it to your walks repository on GitHub to update what friends see.')};
+function setMode(m){MODE=m;try{localStorage.setItem('walks-mode',m)}catch(e){}LOG=editing()?LOCAL:SHARED;modeUI();render();if($('dlg').open&&openId)openWalk(openId)}
+function modeUI(){
+  $('editTools').hidden=!editing();$('editTools').style.display=editing()?'contents':'none';
+  $('modeBtn').textContent=editing()?'Switch to read-only view':'Switch to editing on this device';
+  const when=sharedAt?new Date(sharedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'';
+  $('logNote').textContent=editing()
+    ?'Editing: your log is kept on this device. Back it up now and then. To update what friends see, tap Share log with friends and upload shared-log.json to the walks repository on GitHub.'
+    :(sharedState==='ok'?`Read-only: showing Tim’s walk log${when?' as shared on '+when:''}.`:sharedState==='none'?'Read-only: no walk log has been shared yet.':sharedState==='error'?'Read-only: the shared walk log couldn’t be loaded. Check your connection.':'Read-only: loading the shared walk log…');
+  if(!editing())setStatus($('logNote').textContent);else setStatus(Object.keys(LOCAL).length?'':'No walks logged on this device yet. Open a walk to add the first date.');
+}
+$('modeBtn').onclick=()=>setMode(editing()?'view':'edit');
+fetch('shared-log.json?t='+Date.now(),{cache:'no-store'}).then(r=>{if(r.status===404){sharedState='none';return null}if(!r.ok)throw new Error(r.status);return r.json()})
+  .then(j=>{if(j){SHARED=j.log||{};sharedAt=j.saved||'';sharedState='ok'}if(!editing()){LOG=SHARED;render()}modeUI()})
+  .catch(()=>{sharedState='error';modeUI()});
+modeUI();
 render();
 </script>
 </body></html>
