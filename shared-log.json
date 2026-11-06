@@ -1,7 +1,7 @@
 {
  "app": "walks",
  "version": 1,
- "saved": "2026-11-06T08:56:06Z",
+ "saved": "2026-11-06T11:02:31Z",
  "log": {
   "34474959": {
    "outings": [
@@ -556,7 +556,7 @@
   "27151543": {
    "outings": [
     {
-     "d": "2025-06-06",
+     "d": "2025-06-08",
      "w": "Just me",
      "n": "PMT trip to brewery"
     }
@@ -589,16 +589,6 @@
      "d": "2025-06-03",
      "w": "Just me",
      "n": "2 day trip Camped Dropswell Farm in 1 man tent"
-    }
-   ],
-   "notes": ""
-  },
-  "27006889": {
-   "outings": [
-    {
-     "d": "2025-05-29",
-     "w": "",
-     "n": ""
     }
    ],
    "notes": ""
@@ -877,7 +867,7 @@
    "outings": [
     {
      "d": "2024-10-17",
-     "w": "",
+     "w": "Ray",
      "n": "Pub: The Pot and Glass"
     }
    ],
@@ -1037,7 +1027,7 @@
    "outings": [
     {
      "d": "2024-05-23",
-     "w": "",
+     "w": "Just me",
      "n": ""
     }
    ],
