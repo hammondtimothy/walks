@@ -129,7 +129,7 @@ form.add input,textarea{font:inherit;padding:7px 9px;border:1px solid var(--line
   <header class="head">
     <div>
       <h1>Walks</h1>
-      <div class="sub">Routes saved in OS Maps, numbered in the order they were saved. Open one to log when you walked it and who came.</div>
+      <div class="sub">Routes from OS Maps, numbered in the order they were first walked. Open one to log when you walked it and who came.</div>
     </div>
   </header>
 
@@ -143,8 +143,8 @@ form.add input,textarea{font:inherit;padding:7px 9px;border:1px solid var(--line
   <div class="bar">
     <input id="q" type="search" placeholder="Search walks or companions" aria-label="Search">
     <select id="sort" aria-label="Sort">
-      <option value="no-desc">Newest saved first</option>
-      <option value="no-asc">Oldest saved first</option>
+      <option value="no-desc">Newest first</option>
+      <option value="no-asc">Oldest first</option>
       <option value="last">Last walked</option>
       <option value="name">Name A–Z</option>
       <option value="dist">Longest first</option>
@@ -250,7 +250,7 @@ function render(){
       return `<button class="row" data-id="${w.id}">
         <img src="${w.img}" alt="" loading="lazy">
         <div style="min-width:0"><div class="nm"><span class="no">${w.no}</span>${esc(w.n)}</div>
-          <div class="meta">${w.loop?'Circular':'Linear'} · ${areaOf(w)} · saved ${fmtD(w.c)}</div>
+          <div class="meta">${w.loop?'Circular':'Linear'} · ${areaOf(w)}</div>
           <div class="chips">${o.length?o.slice(0,4).map(x=>`<span class="chip">${fmtD(x.d)}</span>`).join('')+(o.length>4?`<span class="chip">+${o.length-4}</span>`:''):'<span class="chip none">Not logged yet</span>'}${ppl.map(p=>`<span class="chip who">${esc(p)}</span>`).join('')}</div></div>
         <div class="right"><b>${w.mi.toFixed(2)} mi</b><small>${w.km.toFixed(1)} km · ↑${w.up} m</small></div></button>`}).join(''):'<div class="empty">No walks match these filters.</div>';
   } else drawMap();
@@ -304,7 +304,7 @@ function sheet(w){
   <div class="top"><img src="${w.img}" alt="Route snapshot">
    <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
     <div class="kv"><div><span>Distance</span><b>${w.mi.toFixed(2)} mi</b></div><div><span>Kilometres</span><b>${w.km.toFixed(2)}</b></div><div><span>Ascent</span><b>${w.up} m</b></div>
-     <div><span>Descent</span><b>${w.dn} m</b></div><div><span>Shape</span><b>${w.loop?'Circular':'Linear'}</b></div><div><span>Saved</span><b>${fmtD(w.c)}</b></div>
+     <div><span>Descent</span><b>${w.dn} m</b></div><div><span>Shape</span><b>${w.loop?'Circular':'Linear'}</b></div><div><span>First walked</span><b>${(()=>{const d=outingsOf(w).map(x=>x.d).filter(Boolean).sort()[0];return d?fmtD(d):'Not yet'})()}</b></div>
      <div><span>Area</span>${editing()?`<select id="aArea" aria-label="Area" style="font:inherit;padding:3px 6px;width:100%;max-width:100%;min-width:0;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink)">${['Local','Wider UK','International'].map(a=>`<option${a===areaOf(w)?' selected':''}>${a}</option>`).join('')}</select>`:`<b>${areaOf(w)}</b>`}</div>
      <div><span>From home</span><b>${w.hm} mi</b></div><div><span>Length band</span><b>${w.band}</b></div></div>
     <div class="acts"><button class="btn" id="gpxBtn"${dl?'':' disabled title="Downloads aren’t available in this view"'}>Download GPX</button>
